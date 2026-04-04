@@ -1,20 +1,21 @@
-# **CMPT 371 A3 Socket Programming `Tic-Tac-Toe`**
+# **CMPT 371 A3 Socket Programming `Battleship**
 
 **Course:** CMPT 371 \- Data Communications & Networking  
 **Instructor:** Mirza Zaeem Baig  
 **Semester:** Spring 2026  
-<span style="color: purple;">***RUBRIC NOTE: As per submission guidelines, only one group member will submit the link to this repository on Canvas.***
 
 ## **Group Members**
 
 | Name | Student ID | Email |
 | :---- | :---- | :---- |
-| Jane Doe | 301111111 | jane.doe@university.edu |
-| John Smith | 301222222 | john.smith@university.edu |
+| Julian Loewenherz | 301579327 | jane.doe@university.edu |
+| Jaivir Malhi | 301457742 | jai_malhi@sfu.ca |
+
+# ALL CONTENT BELOW THIS IS PLACEHOLDER & MUST BE UPDATED
 
 ## **1\. Project Overview & Description**
 
-This project is a multiplayer Tic-Tac-Toe game built using Python's Socket API (TCP). It allows two distinct clients to connect to a central server, be matched into a game lobby, and play against each other in real-time. The server handles the game logic, board state validation, and win-condition checking, ensuring that clients cannot cheat by modifying their local game state.
+This project is a multiplayer Battleship game built using Python's Socket API (TCP). It allows two distinct clients to connect to a central server, be matched into a game lobby, and play against each other in real-time. The server handles the game logic, board state validation, and win-condition checking, ensuring that clients cannot cheat by modifying their local game state.
 
 ## **2\. System Limitations & Edge Cases**
 
@@ -96,14 +97,13 @@ We designed a custom application-layer protocol for data exchange usin JSON over
 
 ## **6\. Academic Integrity & References**
 
-<span style="color: purple;">***RUBRIC NOTE: List all references used and help you got. Below is an example.***</span>
-
 * **Code Origin:**  
-  * The socket boilerplate was adapted from the course tutorial "TCP Echo Server". The core multithreaded game logic, protocol, and state management were written by the group.  
+  - Gen AI was used to create boilerplate file structure
+  - The core game logic, protocol, and state management were written by the group.  
 * **GenAI Usage:**  
-  * ChatGPT was used to assist in generating the Unicode box-drawing characters for the CLI interface, and to help structure the TCP buffer-splitting logic (`\n delimiter`).  
-  * Gemini was used to help in `README.md` writing and polishing.  
-  * GitHub Copilot was used to help plan the workflow of the application.   
+  - ChatGPT was used to assist in generating the file structure and code comments
+  - ChatGPT was used to assist in generating the terminal UI
+  - Claude was used to help in `README.md` writing and polishing
 * **References:**  
-  * [Python Socket Programming HOWTO](https://docs.python.org/3/howto/sockets.html)  
-  * [Real Python: Intro to Python Threading](https://realpython.com/intro-to-python-threading/)
+  - [Socket Programming in Python (Guide)](https://realpython.com/python-sockets/)  
+  - [Real Python: Intro to Python Threading](https://realpython.com/intro-to-python-threading/)

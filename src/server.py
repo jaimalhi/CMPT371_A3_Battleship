@@ -1,133 +1,239 @@
 """
-CMPT 371 A3: Multiplayer Tic-Tac-Toe Server
-Architecture: TCP Sockets with Multithreaded Session Management
-Reference: Socket boilerplate adapted from "TCP Echo Server" tutorial.
+server.py
+
+Top-level Battleship server process.
+
+This module:
+- opens a TCP server socket
+- accepts client connections
+- reads newline-delimited JSON messages from clients
+- passes messages to ServerController
+- sends outbound responses/events back to the appropriate clients
+- preserves match state across disconnect/reconnects
+
+This file owns transport/socket concerns. Core game rules live in the core/
+package, and session/message handling lives in network/server_controller.py.
 """
+
+from __future__ import annotations
 
 import socket
 import threading
-import json
+import uuid
+from typing import Dict, Optional
 
-# Server configuration
-HOST = '127.0.0.1'
-PORT = 5050
+from network.protocol import Protocol
+from network.server_controller import OutboundEvent, ServerController
+from utils.constants import SERVER_HOST, SERVER_PORT
 
-# Matchmaking Queue: Temporarily holds connected client sockets until 
-# two players are available to form a GameSession.
-matchmaking_queue = []
 
-def check_winner(board):
+class BattleshipServer:
     """
-    Basic win and draw validation.
-    Enforces the "Single Source of Truth" rule: the server calculates wins 
-    so clients cannot cheat by modifying their local memory.
-    """
-    # Check rows and columns for a match
-    for i in range(3):
-        if board[i][0] == board[i][1] == board[i][2] != ' ': return board[i][0]
-        if board[0][i] == board[1][i] == board[2][i] != ' ': return board[0][i]
+    TCP server for a 2-player Battleship match.
 
-    # Check diagonals
-    if board[0][0] == board[1][1] == board[2][2] != ' ': return board[0][0]
-    if board[0][2] == board[1][1] == board[2][0] != ' ': return board[0][2]
-
-    # Check for a draw (no empty spaces left)
-    if all(cell != ' ' for row in board for cell in row): return 'Draw'
-    return None
-
-def game_session(conn_x, conn_o):
+    Design:
+    - one shared ServerController instance
+    - one thread per connected client
+    - connection IDs are generated server-side
+    - match state persists even if a player disconnects
     """
-    Isolated game loop for two matched players running on a background thread.
-    This guarantees concurrent sessions do not block each other.
-    """
-    # Protocol: Assign roles using the "WELCOME" message.
-    # Note: \n is appended to act as a TCP message boundary.
-    conn_x.sendall((json.dumps({"type": "WELCOME", "payload": "Player X"}) + '\n').encode('utf-8'))
-    conn_o.sendall((json.dumps({"type": "WELCOME", "payload": "Player O"}) + '\n').encode('utf-8'))
-    
-    # Initialize the authoritative game state
-    board = [[' ', ' ', ' '], [' ', ' ', ' '], [' ', ' ', ' ']]
-    turn = 'X'
-    
-    # Broadcast initial empty board to both players
-    update_msg = json.dumps({"type": "UPDATE", "board": board, "turn": turn, "status": "ongoing"}) + '\n'
-    conn_x.sendall(update_msg.encode('utf-8'))
-    conn_o.sendall(update_msg.encode('utf-8'))
-    
-    # Map roles to their respective socket objects
-    sockets = {'X': conn_x, 'O': conn_o}
-    
-    while True:
-        active_socket = sockets[turn]
-        # Block and wait for the active player to send their move
-        data = active_socket.recv(1024).decode('utf-8')
-        
-        # If multiple messages arrive buffered together in the TCP stream, 
-        # we only process the first valid one using the \n boundary.
-        clean_data = data.strip().split('\n')[0]
-        msg = json.loads(clean_data)
-        
-        # Protocol: Process the "MOVE" action
-        if msg["type"] == "MOVE":
-            r, c = msg["row"], msg["col"]
-            # Update authoritative state
-            board[r][c] = turn  
-            
-            # Check for win/draw after the move
-            winner = check_winner(board)
-            status = "ongoing"
-            if winner:
-                status = "Draw!" if winner == 'Draw' else f"Player {winner} wins!"
+
+    def __init__(self, host: str = SERVER_HOST, port: int = SERVER_PORT) -> None:
+        self.host = host
+        self.port = port
+
+        self.controller = ServerController()
+
+        self._server_socket: Optional[socket.socket] = None
+        self._client_sockets: Dict[str, socket.socket] = {}
+        self._lock = threading.RLock()
+        self._running = False
+
+    # ====================== Lifecycle ======================
+    def start(self) -> None:
+        """
+        Start the server and begin accepting clients.
+        """
+        if self._running:
+            raise RuntimeError("Server is already running.")
+
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.bind((self.host, self.port))
+        self._server_socket.listen()
+
+        self._running = True
+        print(f"Battleship server listening on {self.host}:{self.port}")
+
+        try:
+            while self._running:
+                try:
+                    client_socket, client_addr = self._server_socket.accept()
+                except OSError:
+                    if not self._running:
+                        break
+                    raise
+
+                connection_id = self._generate_connection_id()
+                with self._lock:
+                    self._client_sockets[connection_id] = client_socket
+
+                print(f"Accepted connection from {client_addr} as {connection_id}")
+
+                thread = threading.Thread(
+                    target=self._handle_client,
+                    args=(connection_id, client_socket, client_addr),
+                    daemon=True,
+                )
+                thread.start()
+
+        finally:
+            self.stop()
+
+    def stop(self) -> None:
+        """
+        Stop the server and close all sockets.
+
+        Safe to call multiple times.
+        """
+        if not self._running and self._server_socket is None:
+            return
+
+        self._running = False
+
+        with self._lock:
+            for connection_id, sock in list(self._client_sockets.items()):
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+            self._client_sockets.clear()
+
+        if self._server_socket is not None:
+            try:
+                self._server_socket.close()
+            except OSError:
+                pass
+            self._server_socket = None
+
+        print("Server stopped.")
+
+    # ====================== Internal connection handling ======================
+    def _generate_connection_id(self) -> str:
+        """Return a unique server-side connection ID."""
+        return str(uuid.uuid4())
+
+    def _handle_client(self, connection_id: str, client_socket: socket.socket, client_addr) -> None:
+        """
+        Handle one connected client until disconnect.
+        """
+        try:
+            reader = client_socket.makefile("rb")
+
+            while self._running:
+                line = reader.readline()
+                if not line:
+                    break
+
+                try:
+                    message = Protocol.decode_message(line)
+                    Protocol.validate_message(message)
+                except ValueError as exc:
+                    self._send_to_connection(
+                        connection_id,
+                        Protocol.make_error(f"Malformed message: {exc}"),
+                    )
+                    continue
+
+                print(f"Received from {client_addr} ({connection_id}): {message}")
+
+                with self._lock:
+                    events = self.controller.handle_message(connection_id, message)
+
+                self._dispatch_events(events)
+
+        except OSError as exc:
+            print(f"Connection error with {client_addr} ({connection_id}): {exc}")
+
+        finally:
+            self._cleanup_connection(connection_id, client_addr)
+
+    def _cleanup_connection(self, connection_id: str, client_addr) -> None:
+        """
+        Clean up after a client disconnects and notify the controller.
+        """
+        print(f"Closing connection for {client_addr} ({connection_id})")
+
+        with self._lock:
+            disconnect_events = self.controller.disconnect(connection_id)
+
+            sock = self._client_sockets.pop(connection_id, None)
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+
+        self._dispatch_events(disconnect_events)
+
+    # ====================== Outbound messaging ======================
+    def _dispatch_events(self, events: list[OutboundEvent]) -> None:
+        """
+        Send each outbound event returned by the controller.
+        """
+        for event in events:
+            if event.target is None:
+                self._broadcast(event.message)
             else:
-                # Swap turns if the game is still ongoing
-                turn = 'O' if turn == 'X' else 'X'
-                
-            # Broadcast the updated state to both clients simultaneously
-            update_msg = json.dumps({"type": "UPDATE", "board": board, "turn": turn, "status": status}) + '\n'
-            conn_x.sendall(update_msg.encode('utf-8'))
-            conn_o.sendall(update_msg.encode('utf-8'))
-            
-            # Terminate the loop if the game has concluded
-            if winner:
-                break
-                
-    # Safely close the sockets when the session ends
-    conn_x.close()
-    conn_o.close()
+                self._send_to_connection(event.target, event.message)
 
-def start_server():
+    def _send_to_connection(self, connection_id: str, message: dict) -> None:
+        """
+        Send one protocol message to a specific connected client.
+        """
+        encoded = Protocol.encode_message(message)
+
+        with self._lock:
+            sock = self._client_sockets.get(connection_id)
+
+        if sock is None:
+            return
+
+        try:
+            sock.sendall(encoded)
+        except OSError as exc:
+            print(f"Failed to send to {connection_id}: {exc}")
+            self._cleanup_connection(connection_id, client_addr="unknown")
+
+    def _broadcast(self, message: dict) -> None:
+        """
+        Send one message to all currently connected clients.
+        """
+        encoded = Protocol.encode_message(message)
+
+        with self._lock:
+            items = list(self._client_sockets.items())
+
+        for connection_id, sock in items:
+            try:
+                sock.sendall(encoded)
+            except OSError as exc:
+                print(f"Failed to broadcast to {connection_id}: {exc}")
+                self._cleanup_connection(connection_id, client_addr="unknown")
+
+
+def main() -> None:
     """
-    Main server event loop. Binds the socket and populates the matchmaking queue.
+    Entry point for running the Battleship server directly.
     """
-    # Initialize an IPv4 (AF_INET) TCP (SOCK_STREAM) socket
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
-    server.listen()
-    print(f"[STARTING] Server is listening on {HOST}:{PORT}")
-    
+    server = BattleshipServer()
+
     try:
-        while True:
-            # Block until a new client connects
-            conn, addr = server.accept()
-            data = conn.recv(1024).decode('utf-8')
-            
-            # Protocol: Check for the initial "CONNECT" handshake
-            if "CONNECT" in data:
-                matchmaking_queue.append(conn)
-                print(f"[QUEUE] Player added. Queue size: {len(matchmaking_queue)}")
-                
-                # Session Management: When 2 players are queued, match them up
-                if len(matchmaking_queue) >= 2:
-                    player_x = matchmaking_queue.pop(0)
-                    player_o = matchmaking_queue.pop(0)
-                    # Spawn an isolated GameSession thread for the matched pair
-                    print("[MATCH] 2 Players found. Spawning GameSession thread.")
-                    threading.Thread(target=game_session, args=(player_x, player_o)).start()
+        server.start()
     except KeyboardInterrupt:
-        # Graceful shutdown on Ctrl+C
-        print("\n[SHUTDOWN] Server closing...")
-    finally:
-        server.close()
+        print("\nShutting down server...")
+        server.stop()
+
 
 if __name__ == "__main__":
-    start_server()
+    main()
