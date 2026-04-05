@@ -92,8 +92,8 @@ class TerminalUI:
         return "\n".join(lines)
 
     # ====================== Input prompts ======================
-    def prompt_ship_placement(self) -> Optional[ShipPlacement]:
-        self._show_remaining_ship_options()
+    def prompt_ship_placement(self, remaining_ships: Optional[List[str]] = None) -> Optional[ShipPlacement]:
+        self._show_remaining_ship_options(remaining_ships)
 
         while True:
             raw = input(
@@ -115,6 +115,10 @@ class TerminalUI:
                 self.show_error(f"Unknown ship name: {ship_name_raw}")
                 continue
 
+            if remaining_ships is not None and ship_name not in remaining_ships:
+                self.show_error(f"{ship_name} has already been placed.")
+                continue
+
             try:
                 row = int(row_raw)
                 col = int(col_raw)
@@ -131,6 +135,7 @@ class TerminalUI:
                 continue
 
             return ship_name, row, col, direction_raw.lower() == "h"
+
 
     def prompt_attack(self) -> Optional[Coord]:
         while True:
@@ -157,9 +162,15 @@ class TerminalUI:
             return row, col
 
     # ====================== Helpers ======================
-    def _show_remaining_ship_options(self) -> None:
+    def _show_remaining_ship_options(self, remaining_ships: Optional[List[str]] = None) -> None:
         self.show_info("Available ships:")
-        for name, size in SHIP_SIZES.items():
+
+        if remaining_ships is None:
+            ships = SHIP_SIZES.items()
+        else:
+            ships = [(name, SHIP_SIZES[name]) for name in remaining_ships]
+
+        for name, size in ships:
             print(f"  - {name} (length {size})")
 
     def _normalize_ship_name(self, raw_name: str) -> Optional[str]:

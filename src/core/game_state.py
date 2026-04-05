@@ -72,35 +72,35 @@ class GameState:
     def place_ship(
         self,
         player_id: int,
-        ship_index: int,
+        ship_name: str,
         start: Coord,
         horizontal: bool,
     ) -> None:
         """
-        Place a ship using its index in SHIP_SIZES.
+        Place a ship using its name from SHIP_SIZES.
         """
         if self.started:
             raise ValueError("Cannot place ships after the game has started.")
 
-        if not 0 <= ship_index < len(SHIP_SIZES):
-            raise ValueError(f"Invalid ship index: {ship_index}")
+        if ship_name not in SHIP_SIZES:
+            raise ValueError(f"Invalid ship name: {ship_name}")
 
         player = self.get_player(player_id)
 
-        if player.has_ship(ship_index):
-            raise ValueError(f"Ship {ship_index} already placed.")
+        if player.has_ship(ship_name):
+            raise ValueError(f"Ship {ship_name} already placed.")
 
-        size = SHIP_SIZES[ship_index]
+        size = SHIP_SIZES[ship_name]
 
         ship = Ship.from_start(
             size=size,
             start=start,
             horizontal=horizontal,
-            name=f"Ship {ship_index + 1}",
+            name=ship_name,
         )
 
         player.board.place_ship(ship)
-        player.mark_ship_placed(ship_index)
+        player.mark_ship_placed(ship_name)
 
     def player_ready(self, player_id: int) -> bool:
         return self.get_player(player_id).all_ships_placed()

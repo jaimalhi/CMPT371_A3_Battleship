@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from utils.constants import SHIP_SIZES
 from core.game_state import AttackResult, GameState
 from network.message_types import MessageTypes
 from network.protocol import Protocol
@@ -261,9 +262,12 @@ class ServerController:
 
         return events
 
-
     # ==================== Message handling ====================
-    def handle_message(self, connection_id: str, message: Dict[str, Any]) -> List[OutboundEvent]:
+    def handle_message(
+        self,
+        connection_id: str,
+        message: Dict[str, Any],
+    ) -> List[OutboundEvent]:
         message_type = message.get("type")
 
         if not isinstance(message_type, str) or not MessageTypes.is_valid(message_type):
@@ -300,7 +304,9 @@ class ServerController:
                 return [
                     OutboundEvent(
                         target=connection_id,
-                        message=Protocol.make_error("Cannot place ships after game has started."),
+                        message=Protocol.make_error(
+                            "Cannot place ships after game has started."
+                        ),
                     )
                 ]
             return self._handle_place_ship(connection_id, player_id, message)
@@ -355,7 +361,7 @@ class ServerController:
         events: List[OutboundEvent] = []
 
         try:
-            ship_name = str(message["ship_name"])
+            ship_name = str(message["ship_name"]).strip()
             row = int(message["row"])
             col = int(message["col"])
             horizontal = self._parse_horizontal(message["horizontal"])
@@ -364,6 +370,18 @@ class ServerController:
                 OutboundEvent(
                     target=connection_id,
                     message=Protocol.make_error("Invalid PLACE_SHIP payload."),
+                )
+            ]
+
+        if ship_name not in SHIP_SIZES:
+            return [
+                OutboundEvent(
+                    target=connection_id,
+                    message=Protocol.make_message(
+                        MessageTypes.PLACE_SHIP_RESULT,
+                        ok=False,
+                        error=f"Invalid ship name: {ship_name}",
+                    ),
                 )
             ]
 
@@ -471,7 +489,9 @@ class ServerController:
             return [
                 OutboundEvent(
                     target=connection_id,
-                    message=Protocol.make_error("Game is paused until both players are connected."),
+                    message=Protocol.make_error(
+                        "Game is paused until both players are connected."
+                    ),
                 )
             ]
 

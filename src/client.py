@@ -16,13 +16,13 @@ ClientConnection and presentation/input to TerminalUI.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from network.client_connection import ClientConnection
 from network.message_types import MessageTypes
 from network.protocol import Protocol
 from ui.terminal_ui import TerminalUI
-from utils.constants import SERVER_HOST, SERVER_PORT
+from utils.constants import SERVER_HOST, SERVER_PORT, SHIP_SIZES
 
 
 class BattleshipClient:
@@ -45,6 +45,7 @@ class BattleshipClient:
 
         self.player_id: Optional[int] = None
         self.running: bool = False
+        self.remaining_ships: Set[str] = set(SHIP_SIZES.keys())
 
     # ====================== Lifecycle ======================
     def run(self) -> None:
@@ -88,7 +89,13 @@ class BattleshipClient:
             Protocol.make_message(MessageTypes.JOIN)
         )
 
-    def _send_place_ship(self, ship_name: str, row: int, col: int, horizontal: bool) -> None:
+    def _send_place_ship(
+        self,
+        ship_name: str,
+        row: int,
+        col: int,
+        horizontal: bool,
+    ) -> None:
         """Send a PLACE_SHIP request."""
         self.connection.send_message(
             Protocol.make_message(
@@ -134,7 +141,9 @@ class BattleshipClient:
             return
 
         if message_type == MessageTypes.WAITING_FOR_OPPONENT_SETUP:
-            self.ui.show_info("All your ships are placed. Waiting for your opponent to finish setup.")
+            self.ui.show_info(
+                "All your ships are placed. Waiting for your opponent to finish setup."
+            )
             return
 
         if message_type == MessageTypes.START_GAME:
@@ -176,8 +185,9 @@ class BattleshipClient:
         Handle initial seat assignment or reconnection assignment.
         """
         self.player_id = message["player_id"]
-        reconnected = message.get("reconnected", False)
+        self.remaining_ships = set(SHIP_SIZES.keys())
 
+        reconnected = message.get("reconnected", False)
         if reconnected:
             self.ui.show_info(f"Reconnected as Player {self.player_id}.")
         else:
@@ -193,6 +203,9 @@ class BattleshipClient:
         if not state:
             return
 
+        if state.get("your_ready", False):
+            self.remaining_ships.clear()
+
         if not state.get("started", False):
             self._maybe_prompt_ship_placement(state)
         elif not state.get("game_over", False) and state.get("current_turn") == self.player_id:
@@ -203,18 +216,21 @@ class BattleshipClient:
         Handle the result of a ship placement attempt.
         """
         ok = message.get("ok", False)
+
         if not ok:
             self.ui.show_error(message.get("error", "Ship placement failed."))
             self._request_next_ship_placement()
             return
 
-        ship_name = message.get("ship_name", "Unknown ship")
+        ship_name = message.get("ship_name")
+        if isinstance(ship_name, str):
+            self.remaining_ships.discard(ship_name)
+
         placed_ship_count = message.get("placed_ship_count")
         total_ships = message.get("total_ships")
 
         self.ui.show_info(
-            f"Placed {ship_name} "
-            f"({placed_ship_count}/{total_ships} ships placed)."
+            f"Placed {ship_name} ({placed_ship_count}/{total_ships} ships placed)."
         )
 
         board = message.get("your_board")
@@ -227,13 +243,16 @@ class BattleshipClient:
         """
         Handle notification that this player completed setup.
         """
+        self.remaining_ships.clear()
         self.ui.show_info("Setup complete.")
 
     def _handle_start_game(self, message: Dict[str, Any]) -> None:
         """
         Handle game start notification.
         """
+        self.remaining_ships.clear()
         self.ui.show_info("The game has started.")
+
         state = message.get("state", {})
         self.ui.render_state(state)
 
@@ -262,16 +281,22 @@ class BattleshipClient:
 
         if attacker_id == self.player_id:
             if sunk and ship_name:
-                self.ui.show_info(f"Your attack at ({row}, {col}) sunk the opponent's {ship_name}.")
+                self.ui.show_info(
+                    f"Your attack at ({row}, {col}) sunk the opponent's {ship_name}."
+                )
             elif hit:
                 self.ui.show_info(f"Your attack at ({row}, {col}) was a hit.")
             else:
                 self.ui.show_info(f"Your attack at ({row}, {col}) was a miss.")
         else:
             if sunk and ship_name:
-                self.ui.show_info(f"Opponent attacked ({row}, {col}) and sunk your {ship_name}.")
+                self.ui.show_info(
+                    f"Opponent attacked ({row}, {col}) and sunk your {ship_name}."
+                )
             elif hit:
-                self.ui.show_info(f"Opponent attacked ({row}, {col}) and hit one of your ships.")
+                self.ui.show_info(
+                    f"Opponent attacked ({row}, {col}) and hit one of your ships."
+                )
             else:
                 self.ui.show_info(f"Opponent attacked ({row}, {col}) and missed.")
 
@@ -332,13 +357,21 @@ class BattleshipClient:
         if state.get("your_ready", False):
             return
 
+        if not self.remaining_ships:
+            return
+
         self._request_next_ship_placement()
 
     def _request_next_ship_placement(self) -> None:
         """
         Ask the UI for the next ship placement request and send it.
         """
-        placement = self.ui.prompt_ship_placement()
+        if not self.remaining_ships:
+            return
+
+        placement = self.ui.prompt_ship_placement(
+            remaining_ships=sorted(self.remaining_ships)
+        )
         if placement is None:
             self.ui.show_info("Exiting.")
             self.stop()

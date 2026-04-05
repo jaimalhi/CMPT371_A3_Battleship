@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Set, Tuple
 
-from utils.constants import BOARD_SIZE
+from utils.constants import BOARD_SIZE, SHIP_SIZES
 from core.ship import Ship
 
 Coord = Tuple[int, int]
@@ -46,20 +46,37 @@ class Board:
         """Return the ship occupying coord, or None if empty."""
         return self._ship_cells.get(coord)
 
+    def has_ship_named(self, ship_name: str) -> bool:
+        """Return True if a ship with this name has already been placed."""
+        return any(ship.name == ship_name for ship in self.ships)
+
     def can_place_ship(self, ship: Ship) -> bool:
         """
         Return True if the ship can be placed on this board.
 
         Rules enforced:
+        - ship name must exist in SHIP_SIZES
+        - ship size must match SHIP_SIZES
+        - duplicate ship names are not allowed
         - every occupied cell must be inside bounds
         - ships cannot overlap
         - touching is allowed
         """
+        if ship.name not in SHIP_SIZES:
+            return False
+
+        if ship.size != SHIP_SIZES[ship.name]:
+            return False
+
+        if self.has_ship_named(ship.name):
+            return False
+
         for coord in ship.coordinates:
             if not self.in_bounds(coord):
                 return False
             if coord in self._ship_cells:
                 return False
+
         return True
 
     def place_ship(self, ship: Ship) -> None:
@@ -69,6 +86,18 @@ class Board:
         Raises:
             ValueError: if the ship placement is invalid.
         """
+        if ship.name not in SHIP_SIZES:
+            raise ValueError(f"Unknown ship name: {ship.name}.")
+
+        expected_size = SHIP_SIZES[ship.name]
+        if ship.size != expected_size:
+            raise ValueError(
+                f"Ship {ship.name} has size {ship.size}, expected {expected_size}."
+            )
+
+        if self.has_ship_named(ship.name):
+            raise ValueError(f"Ship {ship.name} has already been placed.")
+
         if not self.can_place_ship(ship):
             raise ValueError(f"Invalid ship placement for {ship.name}.")
 
@@ -76,9 +105,9 @@ class Board:
         for coord in ship.coordinates:
             self._ship_cells[coord] = ship
 
-    def all_ships_placed(self, expected_ship_count: int) -> bool:
-        """Return True if the expected number of ships have been placed."""
-        return len(self.ships) == expected_ship_count
+    def all_ships_placed(self) -> bool:
+        """Return True if all required ships have been placed."""
+        return len(self.ships) == len(SHIP_SIZES)
 
     def already_attacked(self, coord: Coord) -> bool:
         """Return True if this coordinate has already been targeted."""
@@ -95,6 +124,7 @@ class Board:
         - sunk: whether that hit sank a ship
         - ship_name: the affected ship name if relevant
         - game_over: whether all ships are now sunk
+        - message: a human-readable result message
 
         Example:
             {
@@ -102,8 +132,9 @@ class Board:
                 "repeated": False,
                 "hit": True,
                 "sunk": False,
-                "ship_name": "Destroyer",
+                "ship_name": "Destroyer1",
                 "game_over": False,
+                "message": "Hit Destroyer1.",
             }
         """
         if not self.in_bounds(coord):
@@ -171,7 +202,7 @@ class Board:
         """
         grid = [["." for _ in range(self.size)] for _ in range(self.size)]
 
-        for coord, ship in self._ship_cells.items():
+        for coord in self._ship_cells:
             row, col = coord
             grid[row][col] = "S"
 

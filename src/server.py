@@ -20,11 +20,14 @@ from __future__ import annotations
 import socket
 import threading
 import uuid
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from network.protocol import Protocol
 from network.server_controller import OutboundEvent, ServerController
 from utils.constants import SERVER_HOST, SERVER_PORT
+
+
+ClientAddr = Tuple[str, int]
 
 
 class BattleshipServer:
@@ -102,7 +105,11 @@ class BattleshipServer:
         self._running = False
 
         with self._lock:
-            for connection_id, sock in list(self._client_sockets.items()):
+            for _, sock in list(self._client_sockets.items()):
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
                 try:
                     sock.close()
                 except OSError:
@@ -123,10 +130,17 @@ class BattleshipServer:
         """Return a unique server-side connection ID."""
         return str(uuid.uuid4())
 
-    def _handle_client(self, connection_id: str, client_socket: socket.socket, client_addr) -> None:
+    def _handle_client(
+        self,
+        connection_id: str,
+        client_socket: socket.socket,
+        client_addr: ClientAddr,
+    ) -> None:
         """
         Handle one connected client until disconnect.
         """
+        reader = None
+
         try:
             reader = client_socket.makefile("rb")
 
@@ -156,9 +170,15 @@ class BattleshipServer:
             print(f"Connection error with {client_addr} ({connection_id}): {exc}")
 
         finally:
+            if reader is not None:
+                try:
+                    reader.close()
+                except OSError:
+                    pass
+
             self._cleanup_connection(connection_id, client_addr)
 
-    def _cleanup_connection(self, connection_id: str, client_addr) -> None:
+    def _cleanup_connection(self, connection_id: str, client_addr: object) -> None:
         """
         Clean up after a client disconnects and notify the controller.
         """
@@ -170,6 +190,10 @@ class BattleshipServer:
             sock = self._client_sockets.pop(connection_id, None)
             if sock is not None:
                 try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
                     sock.close()
                 except OSError:
                     pass
@@ -177,7 +201,7 @@ class BattleshipServer:
         self._dispatch_events(disconnect_events)
 
     # ====================== Outbound messaging ======================
-    def _dispatch_events(self, events: list[OutboundEvent]) -> None:
+    def _dispatch_events(self, events: List[OutboundEvent]) -> None:
         """
         Send each outbound event returned by the controller.
         """
