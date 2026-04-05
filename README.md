@@ -108,7 +108,7 @@ python server.py
 
 Expected output:
 ```
-Battleship server listening on 0.0.0.0:5050
+Battleship server listening on 127.0.0.1:5050
 ```
 
 The server is now listening on port `5050` for incoming connections.
@@ -123,7 +123,7 @@ python client.py
 
 Expected output:
 ```
-[INFO] Connecting to server at 0.0.0.0:5050...
+[INFO] Connecting to server at 127.0.0.1:5050...
 [INFO] Connected.
 [INFO] You are Player 1.
 ```
@@ -140,7 +140,7 @@ python client.py
 
 Expected output:
 ```
-[INFO] Connecting to server at 0.0.0.0:5050...
+[INFO] Connecting to server at 127.0.0.1:5050...
 [INFO] Connected.
 [INFO] You are Player 2.
 ```
