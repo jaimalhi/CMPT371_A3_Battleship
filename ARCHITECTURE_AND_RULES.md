@@ -100,7 +100,7 @@ SHIP_SIZES = {
 
 ### Placement
 
-Players choose manual or random placement, then send:
+Players place ships manually, then send:
 
 ```json
 {"type": "ready"}
@@ -186,7 +186,6 @@ All messages are **newline-delimited JSON**.
 |---|---|
 | `join` | Join or reconnect to game |
 | `place_ship` | Place a ship manually |
-| `place_random` | Randomize ship placement |
 | `ready` | Signal placement complete |
 | `attack` | Fire at a coordinate |
 | `get_state` | Request full state update |
