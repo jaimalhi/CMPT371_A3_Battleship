@@ -10,9 +10,8 @@ This module:
 - collects user input through the GUI
 - sends setup and attack actions back to the server
 
-The network receive loop runs on a background thread so it can block
-on socket reads without freezing the Tkinter GUI, which owns the
-main thread via root.mainloop().
+This file owns the high-level client flow, but delegates transport to
+ClientConnection and presentation/input to TerminalUI.
 """
 
 from __future__ import annotations
@@ -65,7 +64,7 @@ class BattleshipClient:
             return
 
         self.running = True
-        self.ui.show_info("Connected. Waiting for server...")
+        self.ui.show_info("Connected.")
 
         self._send_join()
 

@@ -392,7 +392,4 @@ class GuiUI:
             self.ship_var.set(ship_names[0])
 
 
-# Quick visual test when running this file directly
-if __name__ == "__main__":
-    gui = GuiUI()
-    gui.root.mainloop()
+
