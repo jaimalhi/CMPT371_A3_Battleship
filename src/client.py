@@ -7,31 +7,33 @@ This module:
 - connects to the Battleship server
 - joins the match
 - receives and interprets server messages
-- collects user input through TerminalUI
+- collects user input through the GUI
 - sends setup and attack actions back to the server
 
-This file owns the high-level client flow, but delegates transport to
-ClientConnection and presentation/input to TerminalUI.
+The network receive loop runs on a background thread so it can block
+on socket reads without freezing the Tkinter GUI, which owns the
+main thread via root.mainloop().
 """
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict, Optional, Set
 
 from network.client_connection import ClientConnection
 from network.message_types import MessageTypes
 from network.protocol import Protocol
-from ui.terminal_ui import TerminalUI
+from ui.gui import GuiUI
 from utils.constants import SERVER_HOST, SERVER_PORT, SHIP_SIZES
 
 
 class BattleshipClient:
     """
-    High-level Battleship terminal client.
+    High-level Battleship GUI client.
 
     Responsibilities:
     - maintain local knowledge such as assigned player ID
-    - interpret server messages
+    - interpret server messages (on background thread)
     - ask the UI for user actions when appropriate
     - send protocol messages to the server
     """
@@ -41,7 +43,7 @@ class BattleshipClient:
         self.port = port
 
         self.connection = ClientConnection(host, port)
-        self.ui = TerminalUI()
+        self.ui = GuiUI()
 
         self.player_id: Optional[int] = None
         self.running: bool = False
@@ -50,7 +52,8 @@ class BattleshipClient:
     # ====================== Lifecycle ======================
     def run(self) -> None:
         """
-        Start the client application and process messages until exit.
+        Connect to the server, start the network thread, then hand
+        control to the Tkinter main loop.
         """
         self.ui.show_info(f"Connecting to server at {self.host}:{self.port}...")
 
@@ -58,22 +61,31 @@ class BattleshipClient:
             self.connection.connect()
         except ConnectionError as exc:
             self.ui.show_error(str(exc))
+            self.ui.root.mainloop()
             return
 
         self.running = True
-        self.ui.show_info("Connected.")
+        self.ui.show_info("Connected. Waiting for server...")
 
+        self._send_join()
+
+        net_thread = threading.Thread(target=self._receive_loop, daemon=True)
+        net_thread.start()
+
+        self.ui.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
+        self.ui.root.mainloop()
+
+    def _receive_loop(self) -> None:
+        """
+        Runs on a background thread.  Blocks on receive_message() and
+        dispatches each message through the handler chain.
+        """
         try:
-            self._send_join()
-
             while self.running:
                 message = self.connection.receive_message()
                 self._handle_message(message)
-
         except ConnectionError as exc:
             self.ui.show_error(str(exc))
-        except KeyboardInterrupt:
-            self.ui.show_info("Interrupted by user.")
         finally:
             self.connection.close()
             self.ui.show_info("Disconnected.")
@@ -81,6 +93,12 @@ class BattleshipClient:
     def stop(self) -> None:
         """Stop the client loop."""
         self.running = False
+
+    def _on_window_close(self) -> None:
+        """Called when the user closes the Tkinter window."""
+        self.stop()
+        self.connection.close()
+        self.ui.root.destroy()
 
     # ====================== Outbound helpers ======================
     def _send_join(self) -> None:
@@ -269,6 +287,7 @@ class BattleshipClient:
         ok = message.get("ok", False)
         if not ok:
             self.ui.show_error(message.get("error", "Attack failed."))
+            self._request_attack()
             return
 
         attacker_id = message.get("attacker_id")
