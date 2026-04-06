@@ -64,6 +64,7 @@ class BattleshipServer:
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.bind((self.host, self.port))
         self._server_socket.listen()
+        self._server_socket.settimeout(1.0)  # <- important
 
         self._running = True
         print(f"Battleship server listening on {self.host}:{self.port}")
@@ -72,6 +73,8 @@ class BattleshipServer:
             while self._running:
                 try:
                     client_socket, client_addr = self._server_socket.accept()
+                except socket.timeout:
+                    continue
                 except OSError:
                     if not self._running:
                         break
