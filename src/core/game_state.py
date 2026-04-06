@@ -166,8 +166,10 @@ class GameState:
             result.winner_id = attacker_id
             return result
 
-        self.current_turn = defender_id
-        self.turn_count += 1
+        if (not board_result["hit"]):
+            self.current_turn = defender_id
+            self.turn_count += 1
+            
         return result
 
     def forfeit(self, loser_id: int) -> AttackResult:

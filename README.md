@@ -287,7 +287,10 @@ Each client receives a filtered state snapshot. They can see their own full boar
 - ChatGPT was used to assist in generating the file structure and code comments.
 - ChatGPT was used to assist in generating the terminal UI.
 - Claude was used to assist in `README.md` writing and polishing.
+- Claude was used in creating the tkinter frontend GUI. 
 
 **References:**
 - [Socket Programming in Python (Guide) — Real Python](https://realpython.com/python-sockets/)
 - [Real Python: Intro to Python Threading](https://realpython.com/intro-to-python-threading/)
+
+- [Tkinter Beginner Course - Python GUI Development (https://www.youtube.com/watch?v=ibf5cx221hk)]
