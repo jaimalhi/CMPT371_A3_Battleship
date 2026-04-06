@@ -292,3 +292,5 @@ Each client receives a filtered state snapshot. They can see their own full boar
 **References:**
 - [Socket Programming in Python (Guide) — Real Python](https://realpython.com/python-sockets/)
 - [Real Python: Intro to Python Threading](https://realpython.com/intro-to-python-threading/)
+
+- [Tkinter Beginner Course - Python GUI Development (https://www.youtube.com/watch?v=ibf5cx221hk)]
