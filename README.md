@@ -26,7 +26,7 @@ The codebase follows a clean four-layer architecture:
 | **Core Game Logic** | `core/` | Pure rules — no sockets, no UI |
 | **Protocol** | `network/protocol.py`, `network/message_types.py` | Message format, validation |
 | **Networking** | `network/server_controller.py`, `network/client_connection.py` | TCP transport, concurrency |
-| **Presentation** | `ui/terminal_ui.py` | Terminal rendering and input |
+| **Presentation** | `ui/terminal_ui.py`, `ui/gui.py` | Terminal & GUI rendering and input options |
 
 ### File Structure
 
@@ -45,7 +45,8 @@ src/
 │   ├── client_connection.py
 │   └── message_types.py
 ├── ui/
-│   └── terminal_ui.py
+│   ├── terminal_ui.py
+│   └── gui_ui.py
 └── utils/
     └── constants.py
 ```
@@ -82,7 +83,7 @@ src/
 
 Our 2-minute video demonstration covering connection establishment, ship placement, real-time gameplay, disconnect/reconnect handling, and game termination can be viewed here:
 
-[**▶️ Watch Project Demo on YouTube**](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+[**▶️ Watch Project Demo on YouTube**](https://www.youtube.com/watch?v=KsDoGm1yTME)
 
 ---
 
@@ -90,9 +91,12 @@ Our 2-minute video demonstration covering connection establishment, ship placeme
 
 To run this project, you need:
 
-- **Python 3.10** or higher
+- **Python 3.13** or higher
 - No external `pip` packages required — only standard library modules are used: `socket`, `threading`, `json`, `uuid`, `sys`, `dataclasses`
-- (Optional) VS Code or any terminal emulator
+- `tkinter` is a part of the Python standard library but may need to be installed if not included
+    - **Linux:** `sudo apt-get update` then `sudo apt-get install python3-tk`
+    - **MacOS:** using homebrew `brew install python-tk`
+    - **Windows:** `tkinter` is included in the Python installer, if missing, reinstall Python and enable it
 
 ---
 
@@ -103,7 +107,7 @@ All commands should be run from the `src/` directory. You will need **three sepa
 ### Step 1 — Start the Server
 
 ```bash
-python server.py
+py server.py
 ```
 
 Expected output:
@@ -118,7 +122,7 @@ The server is now listening on port `5050` for incoming connections.
 Open a new terminal window and run:
 
 ```bash
-python client.py
+py client.py
 ```
 
 Expected output:
@@ -135,7 +139,7 @@ Player 1 will immediately be prompted to place their ships.
 Open a third terminal window and run:
 
 ```bash
-python client.py
+py client.py
 ```
 
 Expected output:
@@ -148,6 +152,7 @@ Expected output:
 Player 2 will also be prompted to place their ships.
 
 ### Step 4 — Ship Placement (Both Players)
+*Note: this is how to place ships when using the terminal UI and not GUI.*
 
 Each player places 5 ships one at a time. When prompted, enter the ship name, starting row, starting column, and orientation:
 
@@ -287,10 +292,9 @@ Each client receives a filtered state snapshot. They can see their own full boar
 - ChatGPT was used to assist in generating the file structure and code comments.
 - ChatGPT was used to assist in generating the terminal UI.
 - Claude was used to assist in `README.md` writing and polishing.
-- Claude was used in creating the tkinter frontend GUI. 
+- Claude was used in creating the `tkinter` frontend GUI. 
 
 **References:**
 - [Socket Programming in Python (Guide) — Real Python](https://realpython.com/python-sockets/)
 - [Real Python: Intro to Python Threading](https://realpython.com/intro-to-python-threading/)
-
-- [Tkinter Beginner Course - Python GUI Development (https://www.youtube.com/watch?v=ibf5cx221hk)]
+- [Tkinter Beginner Course - Python GUI Development](https://www.youtube.com/watch?v=ibf5cx221hk)

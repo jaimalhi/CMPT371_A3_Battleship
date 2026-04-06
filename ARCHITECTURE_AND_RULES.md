@@ -36,7 +36,7 @@ src/
 │   └── message_types.py
 ├── ui/
 │   ├── terminal_ui.py
-│   └── gui_ui.py   # later
+│   └── gui_ui.py
 └── utils/
     └── constants.py
 README.md
@@ -49,7 +49,7 @@ README.md
 | **Core Game Logic** | Pure rules, no sockets or UI |
 | **Protocol** | Message format and validation |
 | **Networking** | TCP connections, concurrency |
-| **Presentation** | Terminal (initial) / GUI (future) |
+| **Presentation** | Terminal / GUI |
 
 ### Principles
 
@@ -237,7 +237,7 @@ This is sufficient for a 2-player game and keeps the implementation simple and r
 ```
 core/       # Pure game logic (no sockets, no UI)
 network/    # Sockets, message handling, protocol
-ui/         # Terminal interface (GUI planned)
+ui/         # Terminal & GUI interface
 ```
 
 ---
